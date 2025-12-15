@@ -1,0 +1,61 @@
+import 'package:flutter/material.dart';
+import '../services/supabase_service.dart';
+import 'quiz_screen.dart';
+
+class CategoryScreen extends StatefulWidget {
+  @override
+  State<CategoryScreen> createState() => _CategoryScreenState();
+}
+
+class _CategoryScreenState extends State<CategoryScreen> {
+  late Future<List<dynamic>> categoriesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    categoriesFuture = SupabaseService.getCategories();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Choose Category')),
+      body: FutureBuilder<List<dynamic>>(
+        future: categoriesFuture,
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final categories = snapshot.data!;
+
+          return ListView.builder(
+            itemCount: categories.length,
+            itemBuilder: (context, index) {
+              final cat = categories[index];
+
+              return Card(
+                margin: const EdgeInsets.all(12),
+                child: ListTile(
+                  title: Text(cat['name']),
+                  trailing: const Icon(Icons.arrow_forward),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => QuizScreen(
+                          categoryId: cat['id'],
+                          categoryName: cat['name'],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
