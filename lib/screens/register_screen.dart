@@ -16,22 +16,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     try {
-      final response = await AuthService.signUp(
+      final res = await AuthService.signUp(
         email: emailCtrl.text.trim(),
         password: passCtrl.text.trim(),
         name: nameCtrl.text.trim(),
       );
 
-      final user = response.user;
-      if (user == null) return;
+      final user = res.user;
+      if (user == null) throw Exception('Register failed');
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('authId', user.id);
       await prefs.setString('userEmail', user.email ?? '');
-      await prefs.setString(
-        'userName',
-        nameCtrl.text.isNotEmpty ? nameCtrl.text : (user.email ?? ''),
-      );
+      await prefs.setString('userName', nameCtrl.text.trim());
       await prefs.setBool('isGuest', false);
 
       if (!mounted) return;
@@ -65,10 +62,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _register,
-              child: const Text('Register'),
-            ),
+            ElevatedButton(onPressed: _register, child: const Text('Register')),
           ],
         ),
       ),

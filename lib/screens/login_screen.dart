@@ -15,36 +15,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     try {
-      final response = await AuthService.signIn(
+      final res = await AuthService.signIn(
         email: emailCtrl.text.trim(),
         password: passCtrl.text.trim(),
       );
 
-      final user = response.user ?? AuthService.currentUser();
-      if (user == null) throw Exception('Login failed');
+      final user = res.user;
+      if (user == null) throw Exception('Invalid email or password');
 
-      final authId = user.id;
-      final email = user.email ?? '';
+      final profile =
+          await AuthService.getProfileByAuthId(user.id);
 
-      // Check profile
-      final profile = await AuthService.getProfileByAuthId(authId);
-
-      // Create profile if missing
       if (profile == null) {
-        await AuthService.createProfile(
-          authId: authId,
-          email: email,
-          name: email,
-        );
+        throw Exception('Profile not found');
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('authId', authId);
-      await prefs.setString('userEmail', email);
-      await prefs.setString(
-        'userName',
-        profile?['name'] ?? email,
-      );
+      await prefs.setString('authId', user.id);
+      await prefs.setString('userEmail', user.email ?? '');
+      await prefs.setString('userName', profile['name']);
       await prefs.setBool('isGuest', false);
 
       if (!mounted) return;
@@ -60,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isGuest', true);
     await prefs.setString('userName', 'Guest');
+    await prefs.remove('authId');
 
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, '/home');
@@ -83,20 +73,13 @@ class _LoginScreenState extends State<LoginScreen> {
               obscureText: true,
             ),
             const SizedBox(height: 20),
-
-            ElevatedButton(
-              onPressed: _login,
-              child: const Text('Login'),
-            ),
-
+            ElevatedButton(onPressed: _login, child: const Text('Login')),
             const SizedBox(height: 12),
-
             OutlinedButton.icon(
               icon: const Icon(Icons.person_outline),
               label: const Text('Continue as Guest'),
               onPressed: _guestLogin,
             ),
-
             TextButton(
               onPressed: () => Navigator.pushNamed(context, '/register'),
               child: const Text('Create account'),

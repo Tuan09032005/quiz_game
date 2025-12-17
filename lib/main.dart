@@ -12,6 +12,7 @@ import 'screens/category_screen.dart';
 import 'screens/ranking_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/admin/admin_screen.dart'; // 🔥 THÊM
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +33,6 @@ class QuizGameApp extends StatelessWidget {
     return MaterialApp(
       title: "Quiz Game",
       debugShowCheckedModeBanner: false,
-
       initialRoute: '/',
 
       routes: {
@@ -44,6 +44,7 @@ class QuizGameApp extends StatelessWidget {
         '/ranking': (context) => RankingScreen(),
         '/profile': (context) => ProfileScreen(),
         '/settings': (context) => SettingsScreen(),
+        '/admin': (context) => const AdminScreen(), // 🔥 BẮT BUỘC
       },
 
       theme: ThemeData(

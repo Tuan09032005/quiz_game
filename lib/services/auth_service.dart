@@ -21,9 +21,9 @@ class AuthService {
       throw Exception('Sign up failed');
     }
 
-    // Tạo profile gắn với auth_id
+    // Tạo profile
     await _client.from('users').insert({
-      'auth_id': user.id, // 🔥 QUAN TRỌNG
+      'auth_id': user.id,
       'email': email,
       'name': name,
       'total_score': 0,
@@ -40,6 +40,9 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    // 🔥 BẮT BUỘC clear session cũ
+    await _client.auth.signOut();
+
     return await _client.auth.signInWithPassword(
       email: email,
       password: password,
@@ -47,38 +50,14 @@ class AuthService {
   }
 
   // =====================
-  // PROFILE HELPERS
+  // PROFILE
   // =====================
   static Future<Map<String, dynamic>?> getProfileByAuthId(String authId) async {
-    final res = await _client
+    return await _client
         .from('users')
         .select()
         .eq('auth_id', authId)
         .maybeSingle();
-
-    return res;
-  }
-
-  static Future<void> createProfile({
-    required String authId,
-    required String email,
-    required String name,
-    bool isGuest = false,
-  }) async {
-    await _client.from('users').insert({
-      'auth_id': authId,
-      'email': email,
-      'name': name,
-      'total_score': 0,
-      'is_guest': isGuest,
-    });
-  }
-
-  // =====================
-  // LOGOUT
-  // =====================
-  static Future<void> signOut() async {
-    await _client.auth.signOut();
   }
 
   // =====================
@@ -86,5 +65,9 @@ class AuthService {
   // =====================
   static User? currentUser() {
     return _client.auth.currentUser;
+  }
+
+  static Future<void> signOut() async {
+    await _client.auth.signOut();
   }
 }
