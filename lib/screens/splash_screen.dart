@@ -5,14 +5,33 @@ class SplashScreen extends StatefulWidget {
   _SplashScreenState createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration(seconds: 2), () {
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,
+    );
+
+    _controller.forward();
+
+    Future.delayed(Duration(seconds: 3), () {
       Navigator.pushReplacementNamed(context, '/login');
     });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -23,23 +42,33 @@ class _SplashScreenState extends State<SplashScreen> {
         height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Colors.blueAccent, Colors.lightBlue],
+            colors: [Colors.deepPurple, Colors.purpleAccent],
             begin: Alignment.topCenter,
-            end: Alignment.bottomCenter
+            end: Alignment.bottomCenter,
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.quiz, color: Colors.white, size: 100),
-            SizedBox(height: 20),
-            Text(
-              "Quiz Game",
-              style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 30),
-            CircularProgressIndicator(color: Colors.white),
-          ],
+        child: FadeTransition(
+          opacity: _animation,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.quiz, color: Colors.white, size: 120),
+              SizedBox(height: 24),
+              Text(
+                "Quiz Game",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 40,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              SizedBox(height: 40),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ],
+          ),
         ),
       ),
     );

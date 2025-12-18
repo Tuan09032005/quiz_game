@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:quiz_game/helpers/theme_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 
@@ -19,72 +20,95 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
-  static const int maxTimePerQuestion = 10; // ⏱ 10s
-  static const int bonusTimeLimit = 3;      // ⚡ 3s bonus
+class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
+  static const int maxTimePerQuestion = 10;
+  static const int bonusTimeLimit = 3;
 
   int currentIndex = 0;
   int score = 0;
-  int timeLeft = maxTimePerQuestion;
+  late int timeLeft;
+  int? selectedAnswerIndex;
+  bool answered = false;
 
   Timer? _timer;
   late DateTime questionStartTime;
 
-  late Future<List<dynamic>> questionsFuture;
-  late List<dynamic> questions;
+  late Future<List<dynamic>> _questionsFuture;
+  List<dynamic>? _questions; // Changed to nullable
+  LinearGradient? _appGradient;
+  AnimationController? _timerAnimationController;
 
   @override
   void initState() {
     super.initState();
-
+    _loadTheme();
     if (widget.isRankingMode) {
-      questionsFuture = SupabaseService.getAllQuestions(limit: 10);
+      _questionsFuture = SupabaseService.getAllQuestions(limit: 10);
     } else {
-      questionsFuture =
-          SupabaseService.getQuestions(widget.categoryId!);
+      _questionsFuture = SupabaseService.getQuestions(widget.categoryId!);
+    }
+  }
+  
+  void _loadTheme() async {
+    final gradient = await ThemeHelper.getCurrentGradient();
+    if (mounted) {
+      setState(() { _appGradient = gradient; });
     }
   }
 
+  void _startQuiz(List<dynamic> questions) {
+    // This function will now be called safely from a post-frame callback
+    setState(() {
+      _questions = questions;
+    });
+    _startTimer();
+  }
+
   void _startTimer() {
+    setState(() {
+      timeLeft = maxTimePerQuestion;
+      questionStartTime = DateTime.now();
+      selectedAnswerIndex = null;
+      answered = false;
+    });
+    _timerAnimationController = AnimationController(vsync: this, duration: const Duration(seconds: maxTimePerQuestion));
+    _timerAnimationController!.reverse(from: 1.0);
+    
     _timer?.cancel();
-    timeLeft = maxTimePerQuestion;
-    questionStartTime = DateTime.now();
-
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        timeLeft--;
-      });
-
-      if (timeLeft <= 0) {
-        timer.cancel();
-        _nextQuestion(); // hết giờ → sang câu
+      if (mounted) {
+        setState(() => timeLeft--);
+        if (timeLeft <= 0) {
+          timer.cancel();
+          _nextQuestion();
+        }
       }
     });
   }
 
-  void selectAnswer(int index, int correctIndex) {
+  void _selectAnswer(int index) {
+    if (answered) return;
+
     _timer?.cancel();
+    _timerAnimationController?.stop();
+    final isCorrect = index == _questions![currentIndex]['correct_index'];
+    final elapsedSeconds = DateTime.now().difference(questionStartTime).inSeconds;
 
-    final elapsedSeconds =
-        DateTime.now().difference(questionStartTime).inSeconds;
-
-    if (index == correctIndex) {
-      score += 1;
-
-      // ⚡ bonus nếu trả lời <= 3s
-      if (elapsedSeconds <= bonusTimeLimit) {
-        score += 1;
+    setState(() {
+      answered = true;
+      selectedAnswerIndex = index;
+      if (isCorrect) {
+        score++;
+        if (elapsedSeconds <= bonusTimeLimit) score++;
       }
-    }
+    });
 
-    _nextQuestion();
+    Future.delayed(const Duration(seconds: 1), () => _nextQuestion());
   }
 
   void _nextQuestion() {
-    if (currentIndex < questions.length - 1) {
-      setState(() {
-        currentIndex++;
-      });
+    if (currentIndex < _questions!.length - 1) {
+      setState(() => currentIndex++);
       _startTimer();
     } else {
       _finishQuiz();
@@ -93,42 +117,29 @@ class _QuizScreenState extends State<QuizScreen> {
 
   Future<void> _finishQuiz() async {
     _timer?.cancel();
+    _timerAnimationController?.dispose();
 
     if (widget.isRankingMode && score > 0) {
       final prefs = await SharedPreferences.getInstance();
       final authId = prefs.getString('authId');
-
       if (authId != null && !authId.startsWith('guest')) {
-        await SupabaseService.addScoreToUser(
-          authId: authId,
-          score: score,
-        );
+        await SupabaseService.addScoreToUser(authId: authId, score: score);
       }
     }
-
-    _showResult();
+    if(mounted) _showResultDialog();
   }
 
-  void _showResult() {
+  void _showResultDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Finished'),
-        content: Text(
-          widget.isRankingMode
-              ? 'Your score: $score'
-              : 'Score: $score / ${questions.length * 2}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('Back'),
-          )
-        ],
+      builder: (_) => _ResultDialog(
+        score: score,
+        totalQuestions: _questions!.length,
+        onBack: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -136,88 +147,192 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _timerAnimationController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text(
-          widget.isRankingMode
-              ? 'Ranking Quiz'
-              : widget.categoryName ?? 'Quiz',
+        title: Text(widget.isRankingMode ? 'Ranking Quiz' : widget.categoryName ?? 'Quiz', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: _appGradient == null
+          ? const Center(child: CircularProgressIndicator())
+          : Container(
+              decoration: BoxDecoration(gradient: _appGradient),
+              child: SafeArea(
+                child: FutureBuilder<List<dynamic>>(
+                  future: _questionsFuture,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator(color: Colors.white));
+                    }
+                    if (snapshot.data!.isEmpty) {
+                      return const Center(child: Text('No questions found', style: TextStyle(color: Colors.white)));
+                    }
+
+                    // FIX: This section is changed to prevent `setState during build` error.
+                    if (_questions == null) {
+                      // We use a post-frame callback to ensure _startQuiz (which calls setState) 
+                      // runs *after* the build is complete.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          _startQuiz(snapshot.data!);
+                        }
+                      });
+                      // Display a loading indicator for the single frame before the callback runs.
+                      return const Center(child: CircularProgressIndicator(color: Colors.white));
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        children: [
+                          _buildProgress(),
+                          const SizedBox(height: 20),
+                          _buildQuestionCard(),
+                          const SizedBox(height: 20),
+                          ..._buildAnswerOptions(),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildProgress() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Question ${currentIndex + 1}/${_questions!.length}', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+            Text('Time: $timeLeft s', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_timerAnimationController != null) 
+          AnimatedBuilder(
+            animation: _timerAnimationController!,
+            builder: (context, child) {
+              return LinearProgressIndicator(
+                value: _timerAnimationController!.value,
+                backgroundColor: Colors.white.withOpacity(0.3),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionCard() {
+    final question = _questions![currentIndex];
+    return Expanded(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24.0),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Center(
+          child: Text(
+            question['question'],
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
         ),
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: questionsFuture,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+  }
 
-          questions = snapshot.data!;
+  List<Widget> _buildAnswerOptions() {
+    final question = _questions![currentIndex];
+    final answers = List<String>.from(question['answers']);
 
-          if (questions.isEmpty) {
-            return const Center(child: Text('No questions found'));
-          }
+    return List.generate(answers.length, (index) {
+      Color tileColor = Colors.white.withOpacity(0.8);
+      Icon? trailingIcon;
 
-          final q = questions[currentIndex];
-          final answers = List<String>.from(q['answers']);
+      if (answered) {
+        if (index == question['correct_index']) {
+          tileColor = Colors.green.shade300;
+          trailingIcon = const Icon(Icons.check_circle, color: Colors.white);
+        } else if (index == selectedAnswerIndex) {
+          tileColor = Colors.red.shade300;
+          trailingIcon = const Icon(Icons.cancel, color: Colors.white);
+        }
+      }
 
-          // chỉ start timer khi render câu đầu
-          if (_timer == null || timeLeft == maxTimePerQuestion) {
-            _startTimer();
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ⏱ TIME BAR
-                LinearProgressIndicator(
-                  value: timeLeft / maxTimePerQuestion,
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  'Time left: $timeLeft s',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  'Question ${currentIndex + 1}/${questions.length}',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  q['question'],
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                ...List.generate(answers.length, (index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: ElevatedButton(
-                      onPressed: () =>
-                          selectAnswer(index, q['correct_index']),
-                      child: Text(answers[index]),
-                    ),
-                  );
-                }),
-              ],
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: Material(
+          color: tileColor,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => _selectAnswer(index),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(child: Text(answers[index], style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w500))),
+                  if (trailingIcon != null) trailingIcon,
+                ],
+              ),
             ),
-          );
-        },
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _ResultDialog extends StatelessWidget {
+  final int score;
+  final int totalQuestions;
+  final VoidCallback onBack;
+
+  const _ResultDialog({required this.score, required this.totalQuestions, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.red.withOpacity(0.95),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Center(child: Text('Quiz Finished!', style: TextStyle(fontWeight: FontWeight.bold))),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Your final score is', style: TextStyle(fontSize: 18)),
+          const SizedBox(height: 16),
+          Text('$score', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+          Text('/ ${totalQuestions * 2}', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+        ],
       ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        ElevatedButton(
+          onPressed: onBack,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+          ),
+          child: const Text('Trở lại chọn chủ đề'),
+        ),
+      ],
     );
   }
 }

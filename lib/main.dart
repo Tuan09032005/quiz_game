@@ -12,7 +12,7 @@ import 'screens/category_screen.dart';
 import 'screens/ranking_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/admin/admin_screen.dart'; // 🔥 THÊM
+import 'screens/admin/admin_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,23 +34,20 @@ class QuizGameApp extends StatelessWidget {
       title: "Quiz Game",
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
-
       routes: {
         '/': (context) => SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
-        '/category': (context) => CategoryScreen(),
+        '/category': (context) => const CategoryScreen(),
         '/ranking': (context) => RankingScreen(),
         '/profile': (context) => ProfileScreen(),
-        '/settings': (context) => SettingsScreen(),
-        '/admin': (context) => const AdminScreen(), // 🔥 BẮT BUỘC
+        '/settings': (context) => const SettingsScreen(),
+        '/admin': (context) => const AdminScreen(),
       },
-
       theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
+        brightness: Brightness.dark,
+        fontFamily: 'Poppins', // Consider adding a modern font like Poppins
       ),
     );
   }

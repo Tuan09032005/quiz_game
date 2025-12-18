@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
-  static final _client = Supabase.instance.client;
+  static final SupabaseClient _client = Supabase.instance.client;
 
   // =====================
   // REGISTER
@@ -21,13 +21,14 @@ class AuthService {
       throw Exception('Sign up failed');
     }
 
-    // Tạo profile
+    // Tạo user trong bảng users
     await _client.from('users').insert({
       'auth_id': user.id,
       'email': email,
       'name': name,
       'total_score': 0,
       'is_guest': false,
+      'created_at': DateTime.now().toIso8601String(),
     });
 
     return response;
@@ -40,7 +41,7 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // 🔥 BẮT BUỘC clear session cũ
+    // Bắt buộc sign out session cũ
     await _client.auth.signOut();
 
     return await _client.auth.signInWithPassword(
@@ -50,9 +51,25 @@ class AuthService {
   }
 
   // =====================
-  // PROFILE
+  // CURRENT USER
   // =====================
-  static Future<Map<String, dynamic>?> getProfileByAuthId(String authId) async {
+  static User? currentUser() {
+    return _client.auth.currentUser;
+  }
+
+  // =====================
+  // LOGOUT
+  // =====================
+  static Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
+  // =====================
+  // GET PROFILE BY AUTH ID
+  // =====================
+  static Future<Map<String, dynamic>?> getProfileByAuthId(
+      String authId,
+      ) async {
     return await _client
         .from('users')
         .select()
@@ -61,13 +78,15 @@ class AuthService {
   }
 
   // =====================
-  // CURRENT USER
+  // UPDATE USER NAME  🔥 FIX LỖI
   // =====================
-  static User? currentUser() {
-    return _client.auth.currentUser;
-  }
-
-  static Future<void> signOut() async {
-    await _client.auth.signOut();
+  static Future<void> updateUserName(
+      String authId,
+      String newName,
+      ) async {
+    await _client
+        .from('users')
+        .update({'name': newName})
+        .eq('auth_id', authId);
   }
 }
