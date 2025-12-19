@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:quiz_game/services/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 
@@ -19,9 +20,9 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> {
+class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
   static const int maxTimePerQuestion = 10; // ⏱ 10s
-  static const int bonusTimeLimit = 3;      // ⚡ 3s bonus
+  static const int bonusTimeLimit = 3; // ⚡ 3s bonus
 
   int currentIndex = 0;
   int score = 0;
@@ -36,12 +37,30 @@ class _QuizScreenState extends State<QuizScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    AudioService.playBgm();
 
     if (widget.isRankingMode) {
       questionsFuture = SupabaseService.getAllQuestions(limit: 10);
     } else {
-      questionsFuture =
-          SupabaseService.getQuestions(widget.categoryId!);
+      questionsFuture = SupabaseService.getQuestions(widget.categoryId!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    AudioService.stopBgm();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      AudioService.pauseBgm();
+    } else if (state == AppLifecycleState.resumed) {
+      AudioService.resumeBgm();
     }
   }
 
@@ -63,6 +82,7 @@ class _QuizScreenState extends State<QuizScreen> {
   }
 
   void selectAnswer(int index, int correctIndex) {
+    AudioService.playButtonSound();
     _timer?.cancel();
 
     final elapsedSeconds =
@@ -123,6 +143,7 @@ class _QuizScreenState extends State<QuizScreen> {
         actions: [
           TextButton(
             onPressed: () {
+              AudioService.playButtonSound();
               Navigator.pop(context);
               Navigator.pop(context);
             },
@@ -131,12 +152,6 @@ class _QuizScreenState extends State<QuizScreen> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 
   @override
