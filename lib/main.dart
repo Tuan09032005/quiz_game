@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:quiz_game/services/audio_service.dart';
 
 import 'config/supabase_config.dart';
 
@@ -21,6 +22,8 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  await AudioService.init();
 
   runApp(const QuizGameApp());
 }
