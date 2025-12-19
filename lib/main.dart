@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:quiz_game/services/audio_service.dart';
 
@@ -13,7 +14,7 @@ import 'screens/category_screen.dart';
 import 'screens/ranking_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/admin/admin_screen.dart'; // 🔥 THÊM
+import 'screens/admin/admin_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,27 +34,26 @@ class QuizGameApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: "Quiz Game",
-      debugShowCheckedModeBanner: false,
-      initialRoute: '/',
-
-      routes: {
-        '/': (context) => SplashScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/category': (context) => CategoryScreen(),
-        '/ranking': (context) => RankingScreen(),
-        '/profile': (context) => ProfileScreen(),
-        '/settings': (context) => SettingsScreen(),
-        '/admin': (context) => const AdminScreen(), // 🔥 BẮT BUỘC
-      },
-
-      theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
+    return ThemeManager(
+      child: MaterialApp(
+        title: "Quiz Game",
+        debugShowCheckedModeBanner: false,
+        initialRoute: '/',
+        routes: {
+          '/': (context) => SplashScreen(),
+          '/login': (context) => const LoginScreen(),
+          '/register': (context) => const RegisterScreen(),
+          '/home': (context) => const HomeScreen(),
+          '/category': (context) => const CategoryScreen(),
+          '/ranking': (context) => const RankingScreen(),
+          '/profile': (context) => const ProfileScreen(),
+          '/settings': (context) => const SettingsScreen(),
+          '/admin': (context) => const AdminScreen(),
+        },
+        theme: ThemeData(
+          brightness: Brightness.dark,
+          fontFamily: 'Poppins', // Consider adding a modern font like Poppins
+        ),
       ),
     );
   }

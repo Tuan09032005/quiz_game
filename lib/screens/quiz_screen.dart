@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:quiz_game/services/audio_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
@@ -20,19 +21,23 @@ class QuizScreen extends StatefulWidget {
   State<QuizScreen> createState() => _QuizScreenState();
 }
 
-class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
-  static const int maxTimePerQuestion = 10; // ⏱ 10s
-  static const int bonusTimeLimit = 3; // ⚡ 3s bonus
+class _QuizScreenState extends State<QuizScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
+  static const int maxTimePerQuestion = 10;
+  static const int bonusTimeLimit = 3;
 
   int currentIndex = 0;
   int score = 0;
-  int timeLeft = maxTimePerQuestion;
+  late int timeLeft;
+  int? selectedAnswerIndex;
+  bool answered = false;
 
   Timer? _timer;
   late DateTime questionStartTime;
 
-  late Future<List<dynamic>> questionsFuture;
-  late List<dynamic> questions;
+  late Future<List<dynamic>> _questionsFuture;
+  List<dynamic>? _questions;
+  AnimationController? _timerAnimationController;
 
   @override
   void initState() {
@@ -41,15 +46,16 @@ class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
     AudioService.playBgm();
 
     if (widget.isRankingMode) {
-      questionsFuture = SupabaseService.getAllQuestions(limit: 10);
+      _questionsFuture = SupabaseService.getAllQuestions(limit: 10);
     } else {
-      questionsFuture = SupabaseService.getQuestions(widget.categoryId!);
+      _questionsFuture = SupabaseService.getQuestions(widget.categoryId!);
     }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _timerAnimationController?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     AudioService.stopBgm();
     super.dispose();
@@ -64,47 +70,61 @@ class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _startQuiz(List<dynamic> questions) {
+    setState(() => _questions = questions);
+    _startTimer();
+  }
+
   void _startTimer() {
+    setState(() {
+      timeLeft = maxTimePerQuestion;
+      questionStartTime = DateTime.now();
+      selectedAnswerIndex = null;
+      answered = false;
+    });
+
+    _timerAnimationController =
+        AnimationController(vsync: this, duration: const Duration(seconds: maxTimePerQuestion));
+    _timerAnimationController!.reverse(from: 1.0);
+
     _timer?.cancel();
-    timeLeft = maxTimePerQuestion;
-    questionStartTime = DateTime.now();
-
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        timeLeft--;
-      });
-
+      if (!mounted) return;
+      setState(() => timeLeft--);
       if (timeLeft <= 0) {
         timer.cancel();
-        _nextQuestion(); // hết giờ → sang câu
+        _nextQuestion();
       }
     });
   }
 
-  void selectAnswer(int index, int correctIndex) {
+  void _selectAnswer(int index) {
+    if (answered) return;
+
     AudioService.playButtonSound();
     _timer?.cancel();
+    _timerAnimationController?.stop();
 
+    final isCorrect = index == _questions![currentIndex]['correct_index'];
     final elapsedSeconds =
         DateTime.now().difference(questionStartTime).inSeconds;
 
-    if (index == correctIndex) {
-      score += 1;
+    setState(() {
+      answered = true;
+      selectedAnswerIndex = index;
 
-      // ⚡ bonus nếu trả lời <= 3s
-      if (elapsedSeconds <= bonusTimeLimit) {
-        score += 1;
+      if (isCorrect) {
+        score++;
+        if (elapsedSeconds <= bonusTimeLimit) score++;
       }
-    }
+    });
 
-    _nextQuestion();
+    Future.delayed(const Duration(seconds: 1), _nextQuestion);
   }
 
   void _nextQuestion() {
-    if (currentIndex < questions.length - 1) {
-      setState(() {
-        currentIndex++;
-      });
+    if (currentIndex < _questions!.length - 1) {
+      setState(() => currentIndex++);
       _startTimer();
     } else {
       _finishQuiz();
@@ -113,126 +133,320 @@ class _QuizScreenState extends State<QuizScreen> with WidgetsBindingObserver {
 
   Future<void> _finishQuiz() async {
     _timer?.cancel();
+    _timerAnimationController?.dispose();
+    bool wasScoreSubmitted = false;
 
     if (widget.isRankingMode && score > 0) {
       final prefs = await SharedPreferences.getInstance();
       final authId = prefs.getString('authId');
+      final isGuest = prefs.getBool('isGuest') ?? true;
 
-      if (authId != null && !authId.startsWith('guest')) {
-        await SupabaseService.addScoreToUser(
-          authId: authId,
-          score: score,
-        );
+      if (authId != null && !isGuest) {
+        await SupabaseService.addScoreToUser(authId: authId, score: score);
+        wasScoreSubmitted = true;
       }
     }
 
-    _showResult();
+    if (!mounted) return;
+    _showResultDialog(wasScoreSubmitted);
   }
 
-  void _showResult() {
+  void _showResultDialog(bool wasScoreSubmitted) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Text('Finished'),
-        content: Text(
-          widget.isRankingMode
-              ? 'Your score: $score'
-              : 'Score: $score / ${questions.length * 2}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              AudioService.playButtonSound();
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('Back'),
-          )
-        ],
+      builder: (_) => _ResultDialog(
+        score: score,
+        totalQuestions: _questions!.length,
+        isRankingMode: widget.isRankingMode,
+        wasScoreSubmitted: wasScoreSubmitted,
+        onBack: () {
+          Navigator.pop(context);
+          Navigator.pop(context);
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = ThemeProvider.of(context)!;
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
           widget.isRankingMode
               ? 'Ranking Quiz'
               : widget.categoryName ?? 'Quiz',
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Container(
+        decoration: BoxDecoration(gradient: themeProvider.gradient),
+        child: SafeArea(
+          child: FutureBuilder<List<dynamic>>(
+            future: _questionsFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(
+                    child: CircularProgressIndicator(color: Colors.white));
+              }
+
+              if (snapshot.data!.isEmpty) {
+                return const Center(
+                    child: Text('No questions found',
+                        style: TextStyle(color: Colors.white)));
+              }
+
+              if (_questions == null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _startQuiz(snapshot.data!);
+                });
+                return const Center(
+                    child: CircularProgressIndicator(color: Colors.white));
+              }
+
+              return Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    _buildProgress(),
+                    const SizedBox(height: 20),
+                    _buildQuestionCard(),
+                    const SizedBox(height: 20),
+                    ..._buildAnswerOptions(),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
-      body: FutureBuilder<List<dynamic>>(
-        future: questionsFuture,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+    );
+  }
 
-          questions = snapshot.data!;
-
-          if (questions.isEmpty) {
-            return const Center(child: Text('No questions found'));
-          }
-
-          final q = questions[currentIndex];
-          final answers = List<String>.from(q['answers']);
-
-          // chỉ start timer khi render câu đầu
-          if (_timer == null || timeLeft == maxTimePerQuestion) {
-            _startTimer();
-          }
-
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ⏱ TIME BAR
-                LinearProgressIndicator(
-                  value: timeLeft / maxTimePerQuestion,
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  'Time left: $timeLeft s',
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  'Question ${currentIndex + 1}/${questions.length}',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  q['question'],
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                ...List.generate(answers.length, (index) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: ElevatedButton(
-                      onPressed: () =>
-                          selectAnswer(index, q['correct_index']),
-                      child: Text(answers[index]),
-                    ),
-                  );
-                }),
-              ],
+  Widget _buildProgress() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Question ${currentIndex + 1}/${_questions!.length}',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
             ),
-          );
-        },
+            Text(
+              'Time: $timeLeft s',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_timerAnimationController != null)
+          AnimatedBuilder(
+            animation: _timerAnimationController!,
+            builder: (context, child) {
+              return LinearProgressIndicator(
+                value: _timerAnimationController!.value,
+                backgroundColor: Colors.white.withOpacity(0.3),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(Colors.white),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildQuestionCard() {
+    final question = _questions![currentIndex];
+    return Expanded(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24.0),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.9),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Center(
+          child: Text(
+            question['question'],
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87),
+          ),
+        ),
       ),
+    );
+  }
+
+  List<Widget> _buildAnswerOptions() {
+    final question = _questions![currentIndex];
+    final answers = List<String>.from(question['answers']);
+
+    return List.generate(answers.length, (index) {
+      Color tileColor = Colors.white.withOpacity(0.8);
+      Icon? trailingIcon;
+
+      if (answered) {
+        if (index == question['correct_index']) {
+          tileColor = Colors.green.shade300;
+          trailingIcon =
+              const Icon(Icons.check_circle, color: Colors.white);
+        } else if (index == selectedAnswerIndex) {
+          tileColor = Colors.red.shade300;
+          trailingIcon =
+              const Icon(Icons.cancel, color: Colors.white);
+        }
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12.0),
+        child: Material(
+          color: tileColor,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () => _selectAnswer(index),
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 20, vertical: 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      answers[index],
+                      style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  if (trailingIcon != null) trailingIcon,
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _ResultDialog extends StatelessWidget {
+  final int score;
+  final int totalQuestions;
+  final VoidCallback onBack;
+  final bool isRankingMode;
+  final bool wasScoreSubmitted;
+
+  const _ResultDialog({
+    required this.score,
+    required this.totalQuestions,
+    required this.onBack,
+    required this.isRankingMode,
+    required this.wasScoreSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    String title = 'Quiz Finished!';
+    List<Widget> contentChildren = [
+      Text('Your score is',
+          style: TextStyle(fontSize: 18, color: Colors.grey[800])),
+      const SizedBox(height: 16),
+      Text('$score',
+          style: const TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              color: Colors.blueAccent)),
+    ];
+
+    if (isRankingMode) {
+      title = 'Ranking Quiz Finished!';
+      if (wasScoreSubmitted) {
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          const Text(
+            'Your score has been submitted to the leaderboard!',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 14,
+                color: Colors.green,
+                fontWeight: FontWeight.w600),
+          ),
+        ]);
+      } else if (score <= 0) {
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          Text(
+            'You need a score greater than 0 to be ranked.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 14,
+                color: Colors.orange,
+                fontWeight: FontWeight.w600),
+          ),
+        ]);
+      } else {
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          const Text(
+            'Sign in to submit your score to the leaderboard.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 14,
+                color: Colors.orange,
+                fontWeight: FontWeight.w600),
+          ),
+        ]);
+      }
+    } else {
+      contentChildren.add(Text(
+        '/ ${totalQuestions * 2}',
+        style: const TextStyle(fontSize: 16, color: Colors.grey),
+      ));
+    }
+
+    return AlertDialog(
+      backgroundColor: Colors.white.withOpacity(0.95),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Center(
+          child: Text(title,
+              style: const TextStyle(fontWeight: FontWeight.bold))),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: contentChildren,
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        ElevatedButton(
+          onPressed: onBack,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+          ),
+          child: const Text('Trở lại chọn chủ đề'),
+        ),
+      ],
     );
   }
 }

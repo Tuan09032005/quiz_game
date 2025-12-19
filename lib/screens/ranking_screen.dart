@@ -1,65 +1,187 @@
 import 'package:flutter/material.dart';
+import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class RankingScreen extends StatelessWidget {
-  // Supabase client
-  final SupabaseClient supabase = Supabase.instance.client;
+class RankingScreen extends StatefulWidget {
+  const RankingScreen({super.key});
 
-  // Lấy danh sách ranking từ Supabase
-  Future<List<Map<String, dynamic>>> fetchRankings() async {
-    final response = await supabase
-      .from('user_rankings') // tên view/table
-      .select('rank_position, name, score')
-      .order('rank_position', ascending: true);
+  @override
+  State<RankingScreen> createState() => _RankingScreenState();
+}
 
-    final data = response as List<dynamic>;
-    return data.map((e) => e as Map<String, dynamic>).toList();
+class _RankingScreenState extends State<RankingScreen> {
+  Future<List<Map<String, dynamic>>> _fetchRankings() async {
+    final response = await Supabase.instance.client
+        .from('user_rankings')
+        .select('rank_position, name, score')
+        .order('rank_position', ascending: true)
+        .limit(100);
+
+    return List<Map<String, dynamic>>.from(response);
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = ThemeProvider.of(context)!;
+    final isLightTheme = themeProvider.textColor == Colors.black87;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Ranking")),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: fetchRankings(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // Khi đang load dữ liệu
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            // Khi có lỗi
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            // Khi không có dữ liệu
-            return const Center(child: Text('No ranking data available'));
-          }
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: Text('Leaderboard', style: TextStyle(color: themeProvider.textColor, fontWeight: FontWeight.bold)),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: IconThemeData(color: themeProvider.textColor),
+      ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(gradient: themeProvider.gradient),
+        child: SafeArea(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _fetchRankings(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator(color: themeProvider.textColor));
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: themeProvider.textColor.withOpacity(0.7))));
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('No ranking data available', style: TextStyle(color: themeProvider.textColor.withOpacity(0.7))));
+              }
 
-          final rankings = snapshot.data!;
+              final rankings = snapshot.data!;
+              final topThree = rankings.where((r) => (r['rank_position'] as int) <= 3).toList();
+              final others = rankings.where((r) => (r['rank_position'] as int) > 3).toList();
 
-          return ListView.separated(
-            itemCount: rankings.length,
-            separatorBuilder: (_, __) => const Divider(),
-            itemBuilder: (context, index) {
-              final item = rankings[index];
-              return ListTile(
-                leading: Text(
-                  '#${item['rank_position']}',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                title: Text(
-                  item['name'],
-                  style: const TextStyle(fontSize: 16),
-                ),
-                trailing: Text(
-                  item['score'].toString(),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Column(
+                  children: [
+                    if (topThree.isNotEmpty) _buildTopThree(topThree, isLightTheme),
+                    if (others.isNotEmpty) _buildOthersList(others, themeProvider.textColor, isLightTheme),
+                  ],
                 ),
               );
             },
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopThree(List<Map<String, dynamic>> topThree, bool isLightTheme) {
+    topThree.sort((a, b) => (a['rank_position'] as int).compareTo(b['rank_position'] as int));
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (topThree.any((e) => e['rank_position'] == 2)) 
+             _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 2), height: 140, medal: '🥈', isLightTheme: isLightTheme),
+          const SizedBox(width: 12),
+          if (topThree.any((e) => e['rank_position'] == 1)) 
+            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 1), height: 160, medal: '🥇', isLightTheme: isLightTheme),
+          const SizedBox(width: 12),
+          if (topThree.any((e) => e['rank_position'] == 3))
+            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 3), height: 120, medal: '🥉', isLightTheme: isLightTheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOthersList(List<Map<String, dynamic>> others, Color textColor, bool isLightTheme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+            Text(
+            'All Rankers',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+          ),
+          const SizedBox(height: 10),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: others.length,
+            itemBuilder: (context, index) {
+              final item = others[index];
+              return Card(
+                 margin: const EdgeInsets.symmetric(vertical: 6),
+                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                 color: isLightTheme ? Colors.white : Colors.white.withOpacity(0.15),
+                 elevation: isLightTheme ? 2 : 0,
+                 child: ListTile(
+                  leading: Text(
+                    '#${item['rank_position']}',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isLightTheme ? Colors.grey[600] : Colors.white70),
+                  ),
+                  title: Text(
+                    item['name'],
+                    style: TextStyle(fontWeight: FontWeight.w600, color: isLightTheme ? Colors.black87 : Colors.white),
+                  ),
+                  trailing: Text(
+                    item['score'].toString(),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isLightTheme ? Colors.blueAccent : Colors.yellowAccent),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopRankerCard extends StatelessWidget {
+  final Map<String, dynamic> ranker;
+  final double height;
+  final String medal;
+  final bool isLightTheme;
+
+  const _TopRankerCard({required this.ranker, required this.height, required this.medal, required this.isLightTheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      width: 100,
+      decoration: BoxDecoration(
+        color: isLightTheme ? Colors.white : Colors.white.withOpacity(0.9),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+        boxShadow: [
+          isLightTheme
+              ? BoxShadow(color: Colors.grey.withOpacity(0.2), spreadRadius: 2, blurRadius: 10)
+              : BoxShadow(color: Colors.black.withOpacity(0.1), spreadRadius: 1, blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(medal, style: const TextStyle(fontSize: 36)),
+          const SizedBox(height: 8),
+          Text(
+            ranker['name'],
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.black87),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            ranker['score'].toString(),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
+          ),
+        ],
       ),
     );
   }
