@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quiz_game/helpers/theme_helper.dart';
+import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RankingScreen extends StatefulWidget {
@@ -10,23 +10,6 @@ class RankingScreen extends StatefulWidget {
 }
 
 class _RankingScreenState extends State<RankingScreen> {
-   LinearGradient? _appGradient;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTheme();
-  }
-
-  void _loadTheme() async {
-    final gradient = await ThemeHelper.getCurrentGradient();
-    if (mounted) {
-      setState(() {
-        _appGradient = gradient;
-      });
-    }
-  }
-
   Future<List<Map<String, dynamic>>> _fetchRankings() async {
     final response = await Supabase.instance.client
         .from('user_rankings')
@@ -39,56 +22,57 @@ class _RankingScreenState extends State<RankingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = ThemeProvider.of(context)!;
+    final isLightTheme = themeProvider.textColor == Colors.black87;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Leaderboard', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('Leaderboard', style: TextStyle(color: themeProvider.textColor, fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: themeProvider.textColor),
       ),
-      body: _appGradient == null 
-          ? const Center(child: CircularProgressIndicator())
-          : Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(gradient: _appGradient),
-              child: SafeArea(
-                child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _fetchRankings(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Colors.white));
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white70)));
-                    }
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(child: Text('No ranking data available', style: TextStyle(color: Colors.white70)));
-                    }
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: BoxDecoration(gradient: themeProvider.gradient),
+        child: SafeArea(
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: _fetchRankings(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator(color: themeProvider.textColor));
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}', style: TextStyle(color: themeProvider.textColor.withOpacity(0.7))));
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('No ranking data available', style: TextStyle(color: themeProvider.textColor.withOpacity(0.7))));
+              }
 
-                    final rankings = snapshot.data!;
-                    final topThree = rankings.where((r) => (r['rank_position'] as int) <= 3).toList();
-                    final others = rankings.where((r) => (r['rank_position'] as int) > 3).toList();
+              final rankings = snapshot.data!;
+              final topThree = rankings.where((r) => (r['rank_position'] as int) <= 3).toList();
+              final others = rankings.where((r) => (r['rank_position'] as int) > 3).toList();
 
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(vertical: 20),
-                      child: Column(
-                        children: [
-                          if (topThree.isNotEmpty) _buildTopThree(topThree),
-                          if (others.isNotEmpty) _buildOthersList(others),
-                        ],
-                      ),
-                    );
-                  },
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Column(
+                  children: [
+                    if (topThree.isNotEmpty) _buildTopThree(topThree, isLightTheme),
+                    if (others.isNotEmpty) _buildOthersList(others, themeProvider.textColor, isLightTheme),
+                  ],
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildTopThree(List<Map<String, dynamic>> topThree) {
+  Widget _buildTopThree(List<Map<String, dynamic>> topThree, bool isLightTheme) {
     topThree.sort((a, b) => (a['rank_position'] as int).compareTo(b['rank_position'] as int));
     
     return Padding(
@@ -98,27 +82,27 @@ class _RankingScreenState extends State<RankingScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (topThree.any((e) => e['rank_position'] == 2)) 
-             _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 2), height: 140, medal: '🥈'),
+             _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 2), height: 140, medal: '🥈', isLightTheme: isLightTheme),
           const SizedBox(width: 12),
           if (topThree.any((e) => e['rank_position'] == 1)) 
-            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 1), height: 160, medal: '🥇'),
+            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 1), height: 160, medal: '🥇', isLightTheme: isLightTheme),
           const SizedBox(width: 12),
           if (topThree.any((e) => e['rank_position'] == 3))
-            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 3), height: 120, medal: '🥉'),
+            _TopRankerCard(ranker: topThree.firstWhere((e) => e['rank_position'] == 3), height: 120, medal: '🥉', isLightTheme: isLightTheme),
         ],
       ),
     );
   }
 
-  Widget _buildOthersList(List<Map<String, dynamic>> others) {
+  Widget _buildOthersList(List<Map<String, dynamic>> others, Color textColor, bool isLightTheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-            const Text(
+            Text(
             'All Rankers',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
           ),
           const SizedBox(height: 10),
           ListView.builder(
@@ -130,20 +114,20 @@ class _RankingScreenState extends State<RankingScreen> {
               return Card(
                  margin: const EdgeInsets.symmetric(vertical: 6),
                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                 color: Colors.white.withOpacity(0.15),
-                 elevation: 0,
+                 color: isLightTheme ? Colors.white : Colors.white.withOpacity(0.15),
+                 elevation: isLightTheme ? 2 : 0,
                  child: ListTile(
                   leading: Text(
                     '#${item['rank_position']}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white70),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isLightTheme ? Colors.grey[600] : Colors.white70),
                   ),
                   title: Text(
                     item['name'],
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+                    style: TextStyle(fontWeight: FontWeight.w600, color: isLightTheme ? Colors.black87 : Colors.white),
                   ),
                   trailing: Text(
                     item['score'].toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.yellowAccent),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isLightTheme ? Colors.blueAccent : Colors.yellowAccent),
                   ),
                 ),
               );
@@ -159,8 +143,9 @@ class _TopRankerCard extends StatelessWidget {
   final Map<String, dynamic> ranker;
   final double height;
   final String medal;
+  final bool isLightTheme;
 
-  const _TopRankerCard({required this.ranker, required this.height, required this.medal});
+  const _TopRankerCard({required this.ranker, required this.height, required this.medal, required this.isLightTheme});
 
   @override
   Widget build(BuildContext context) {
@@ -168,12 +153,16 @@ class _TopRankerCard extends StatelessWidget {
       height: height,
       width: 100,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.9),
+        color: isLightTheme ? Colors.white : Colors.white.withOpacity(0.9),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(16),
           topRight: Radius.circular(16),
         ),
-        boxShadow: [ BoxShadow(color: Colors.black.withOpacity(0.1), spreadRadius: 1, blurRadius: 8)],
+        boxShadow: [
+          isLightTheme
+              ? BoxShadow(color: Colors.grey.withOpacity(0.2), spreadRadius: 2, blurRadius: 10)
+              : BoxShadow(color: Colors.black.withOpacity(0.1), spreadRadius: 1, blurRadius: 8),
+        ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,

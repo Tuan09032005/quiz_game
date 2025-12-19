@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:quiz_game/helpers/theme_helper.dart';
+import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/supabase_service.dart';
 
@@ -35,13 +35,11 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
   late Future<List<dynamic>> _questionsFuture;
   List<dynamic>? _questions; // Changed to nullable
-  LinearGradient? _appGradient;
   AnimationController? _timerAnimationController;
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
     if (widget.isRankingMode) {
       _questionsFuture = SupabaseService.getAllQuestions(limit: 10);
     } else {
@@ -49,15 +47,7 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
     }
   }
   
-  void _loadTheme() async {
-    final gradient = await ThemeHelper.getCurrentGradient();
-    if (mounted) {
-      setState(() { _appGradient = gradient; });
-    }
-  }
-
   void _startQuiz(List<dynamic> questions) {
-    // This function will now be called safely from a post-frame callback
     setState(() {
       _questions = questions;
     });
@@ -118,24 +108,30 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
   Future<void> _finishQuiz() async {
     _timer?.cancel();
     _timerAnimationController?.dispose();
+    bool wasScoreSubmitted = false;
 
     if (widget.isRankingMode && score > 0) {
       final prefs = await SharedPreferences.getInstance();
       final authId = prefs.getString('authId');
-      if (authId != null && !authId.startsWith('guest')) {
+      final isGuest = prefs.getBool('isGuest') ?? true;
+
+      if (authId != null && !isGuest) {
         await SupabaseService.addScoreToUser(authId: authId, score: score);
+        wasScoreSubmitted = true;
       }
     }
-    if(mounted) _showResultDialog();
+    if(mounted) _showResultDialog(wasScoreSubmitted);
   }
 
-  void _showResultDialog() {
+  void _showResultDialog(bool wasScoreSubmitted) {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => _ResultDialog(
         score: score,
         totalQuestions: _questions!.length,
+        isRankingMode: widget.isRankingMode,
+        wasScoreSubmitted: wasScoreSubmitted,
         onBack: () {
           Navigator.pop(context);
           Navigator.pop(context);
@@ -153,6 +149,8 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = ThemeProvider.of(context)!;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -162,50 +160,44 @@ class _QuizScreenState extends State<QuizScreen> with TickerProviderStateMixin {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: _appGradient == null
-          ? const Center(child: CircularProgressIndicator())
-          : Container(
-              decoration: BoxDecoration(gradient: _appGradient),
-              child: SafeArea(
-                child: FutureBuilder<List<dynamic>>(
-                  future: _questionsFuture,
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator(color: Colors.white));
-                    }
-                    if (snapshot.data!.isEmpty) {
-                      return const Center(child: Text('No questions found', style: TextStyle(color: Colors.white)));
-                    }
+      body: Container(
+        decoration: BoxDecoration(gradient: themeProvider.gradient),
+        child: SafeArea(
+          child: FutureBuilder<List<dynamic>>(
+            future: _questionsFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
+              if (snapshot.data!.isEmpty) {
+                return const Center(child: Text('No questions found', style: TextStyle(color: Colors.white)));
+              }
 
-                    // FIX: This section is changed to prevent `setState during build` error.
-                    if (_questions == null) {
-                      // We use a post-frame callback to ensure _startQuiz (which calls setState) 
-                      // runs *after* the build is complete.
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          _startQuiz(snapshot.data!);
-                        }
-                      });
-                      // Display a loading indicator for the single frame before the callback runs.
-                      return const Center(child: CircularProgressIndicator(color: Colors.white));
-                    }
+              if (_questions == null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _startQuiz(snapshot.data!);
+                  }
+                });
+                return const Center(child: CircularProgressIndicator(color: Colors.white));
+              }
 
-                    return Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        children: [
-                          _buildProgress(),
-                          const SizedBox(height: 20),
-                          _buildQuestionCard(),
-                          const SizedBox(height: 20),
-                          ..._buildAnswerOptions(),
-                        ],
-                      ),
-                    );
-                  },
+              return Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    _buildProgress(),
+                    const SizedBox(height: 20),
+                    _buildQuestionCard(),
+                    const SizedBox(height: 20),
+                    ..._buildAnswerOptions(),
+                  ],
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -302,23 +294,67 @@ class _ResultDialog extends StatelessWidget {
   final int score;
   final int totalQuestions;
   final VoidCallback onBack;
+  final bool isRankingMode;
+  final bool wasScoreSubmitted;
 
-  const _ResultDialog({required this.score, required this.totalQuestions, required this.onBack});
+  const _ResultDialog({
+    required this.score,
+    required this.totalQuestions,
+    required this.onBack,
+    required this.isRankingMode,
+    required this.wasScoreSubmitted,
+  });
 
   @override
   Widget build(BuildContext context) {
+    String title = 'Quiz Finished!';
+    List<Widget> contentChildren = [
+      Text('Your score is', style: TextStyle(fontSize: 18, color: Colors.grey[800])),
+      const SizedBox(height: 16),
+      Text('$score', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+    ];
+
+    if (isRankingMode) {
+      title = 'Ranking Quiz Finished!';
+      if (wasScoreSubmitted) {
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          const Text(
+            'Your score has been submitted to the leaderboard!',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.green, fontWeight: FontWeight.w600),
+          ),
+        ]);
+      } else if (score <= 0) {
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          Text(
+            'You need a score greater than 0 to be ranked.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.orange.shade800, fontWeight: FontWeight.w600),
+          ),
+        ]);
+      } else { // Is a guest
+        contentChildren.addAll([
+          const SizedBox(height: 8),
+          const Text(
+            'Sign in to submit your score to the leaderboard.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.orange, fontWeight: FontWeight.w600),
+          ),
+        ]);
+      }
+    } else {
+      contentChildren.add(Text('/ ${totalQuestions * 2}', style: const TextStyle(fontSize: 16, color: Colors.grey)));
+    }
+
     return AlertDialog(
-      backgroundColor: Colors.red.withOpacity(0.95),
+      backgroundColor: Colors.white.withOpacity(0.95),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Center(child: Text('Quiz Finished!', style: TextStyle(fontWeight: FontWeight.bold))),
+      title: Center(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Your final score is', style: TextStyle(fontSize: 18)),
-          const SizedBox(height: 16),
-          Text('$score', style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
-          Text('/ ${totalQuestions * 2}', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-        ],
+        children: contentChildren,
       ),
       actionsAlignment: MainAxisAlignment.center,
       actions: [
