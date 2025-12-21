@@ -13,6 +13,19 @@ class SupabaseService {
         .order('order_index');
   }
 
+  static Future<void> addCategory({required String name}) async {
+    await client.from('categories').insert({
+      'name': name,
+    });
+  }
+
+  static Future<void> deleteCategoryAndQuestions({required String categoryId}) async {
+    // delete questions belonging to category first
+    await client.from('questions').delete().eq('category_id', categoryId);
+    // then delete the category
+    await client.from('categories').delete().eq('id', categoryId);
+  }
+
   // =========================
   // QUESTIONS BY CATEGORY
   // =========================

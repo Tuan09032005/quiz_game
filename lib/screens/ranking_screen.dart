@@ -10,6 +10,14 @@ class RankingScreen extends StatefulWidget {
 }
 
 class _RankingScreenState extends State<RankingScreen> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchRankings();
+  }
+
   Future<List<Map<String, dynamic>>> _fetchRankings() async {
     final response = await Supabase.instance.client
         .from('user_rankings')
@@ -33,6 +41,14 @@ class _RankingScreenState extends State<RankingScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: IconThemeData(color: themeProvider.textColor),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh, color: themeProvider.textColor),
+            onPressed: () async {
+              setState(() => _future = _fetchRankings());
+            },
+          )
+        ],
       ),
       body: Container(
         width: double.infinity,
@@ -40,7 +56,7 @@ class _RankingScreenState extends State<RankingScreen> {
         decoration: BoxDecoration(gradient: themeProvider.gradient),
         child: SafeArea(
           child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: _fetchRankings(),
+            future: _future,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator(color: themeProvider.textColor));
@@ -51,18 +67,35 @@ class _RankingScreenState extends State<RankingScreen> {
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return Center(child: Text('No ranking data available', style: TextStyle(color: themeProvider.textColor.withOpacity(0.7))));
               }
-
               final rankings = snapshot.data!;
-              final topThree = rankings.where((r) => (r['rank_position'] as int) <= 3).toList();
-              final others = rankings.where((r) => (r['rank_position'] as int) > 3).toList();
 
-              return SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Column(
-                  children: [
-                    if (topThree.isNotEmpty) _buildTopThree(topThree, isLightTheme),
-                    if (others.isNotEmpty) _buildOthersList(others, themeProvider.textColor, isLightTheme),
-                  ],
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() => _future = _fetchRankings());
+                  await _future;
+                },
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  itemCount: rankings.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final item = rankings[index];
+                    final rankPos = item['rank_position']?.toString() ?? '${index + 1}';
+                    return Card(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      color: isLightTheme ? Colors.white : Colors.white.withOpacity(0.08),
+                      elevation: isLightTheme ? 2 : 0,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: isLightTheme ? Colors.blueAccent : Colors.yellowAccent,
+                          child: Text(rankPos, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                        title: Text(item['name'] ?? '-', style: TextStyle(fontWeight: FontWeight.w600, color: isLightTheme ? Colors.black87 : Colors.white)),
+                        trailing: Text(item['score']?.toString() ?? '0', style: TextStyle(fontWeight: FontWeight.bold, color: isLightTheme ? Colors.blueAccent : Colors.yellowAccent)),
+                      ),
+                    );
+                  },
                 ),
               );
             },

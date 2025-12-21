@@ -124,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ? Center(child: CircularProgressIndicator(color: themeProvider.textColor))
               : SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                  child: _isGuest ? _buildGuestContent(isLightTheme, themeProvider.textColor) : _buildUserContent(isLightTheme, themeProvider.textColor),
+                          child: _isGuest ? _buildGuestContent(isLightTheme, themeProvider.textColor) : _buildUserContent(isLightTheme, themeProvider.textColor),
                 ),
         ),
       ),
@@ -197,6 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         _buildHeader(textColor),
         _buildInfoCard(isLightTheme),
+        
         const SizedBox(height: 20),
         _buildEditCard(isLightTheme),
         const SizedBox(height: 30),
