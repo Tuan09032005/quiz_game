@@ -3,6 +3,7 @@ import 'package:audioplayers/audioplayers.dart';
 class AudioService {
   static final AudioPlayer _bgmPlayer = AudioPlayer();
   static final AudioPlayer _sfxPlayer = AudioPlayer();
+  static bool _soundEffectsEnabled = true;
 
   static Future<void> init() async {
     _bgmPlayer.setReleaseMode(ReleaseMode.loop);
@@ -28,6 +29,12 @@ class AudioService {
   }
 
   static Future<void> playButtonSound() async {
-    await _sfxPlayer.play(_sfxPlayer.source!);
+    if (_soundEffectsEnabled) {
+      await _sfxPlayer.play(_sfxPlayer.source!);
+    }
+  }
+
+  static void setSoundEffectsEnabled(bool enabled) {
+    _soundEffectsEnabled = enabled;
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quiz_game/services/audio_service.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
 import 'config/supabase_config.dart';
 
 // Import các màn
@@ -25,6 +27,11 @@ Future<void> main() async {
   );
 
   await AudioService.init();
+
+  // Load sound effects setting
+  final prefs = await SharedPreferences.getInstance();
+  final soundEffectsEnabled = prefs.getBool('soundEffects') ?? true;
+  AudioService.setSoundEffectsEnabled(soundEffectsEnabled);
 
   runApp(const QuizGameApp());
 }

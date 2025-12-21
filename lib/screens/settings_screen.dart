@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:quiz_game/helpers/theme_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/audio_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadCurrentThemeIndex();
+    _loadSettings();
   }
 
   void _loadCurrentThemeIndex() async {
@@ -28,6 +30,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _currentThemeIndex = index;
       });
     }
+  }
+
+  void _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _soundEffects = prefs.getBool('soundEffects') ?? true;
+      _backgroundMusic = prefs.getBool('backgroundMusic') ?? false;
+    });
+    AudioService.setSoundEffectsEnabled(_soundEffects);
   }
 
   @override
@@ -60,7 +71,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Hiệu ứng âm thanh',
                 subtitle: 'Bật/tắt âm thanh trong game',
                 value: _soundEffects,
-                onChanged: (val) => setState(() => _soundEffects = val),
+                onChanged: (val) async {
+                  setState(() => _soundEffects = val);
+                  AudioService.setSoundEffectsEnabled(val);
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('soundEffects', val);
+                },
                 icon: Icons.volume_up_rounded,
                 isLightTheme: isLightTheme,
               ),
