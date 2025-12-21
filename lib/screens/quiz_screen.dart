@@ -160,7 +160,8 @@ class _QuizScreenState extends State<QuizScreen>
         totalQuestions: _questions!.length,
         isRankingMode: widget.isRankingMode,
         wasScoreSubmitted: wasScoreSubmitted,
-        onBack: () {
+        onBack: () async {
+          await AudioService.playButtonSound();
           Navigator.pop(context);
           Navigator.pop(context);
         },

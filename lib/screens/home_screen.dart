@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,6 +13,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
+    await AudioService.playButtonSound();
     await AuthService.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
@@ -140,28 +142,40 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: Icons.play_circle_fill_rounded,
           color: Colors.orangeAccent,
           isLightTheme: isLightTheme,
-          onTap: () => Navigator.pushNamed(context, '/category'),
+          onTap: () async {
+            await AudioService.playButtonSound();
+            Navigator.pushNamed(context, '/category');
+          },
         ),
         _MenuItem(
           title: 'Ranking',
           icon: Icons.leaderboard_rounded,
           color: Colors.lightBlueAccent,
            isLightTheme: isLightTheme,
-          onTap: () => Navigator.pushNamed(context, '/ranking'),
+          onTap: () async {
+            await AudioService.playButtonSound();
+            Navigator.pushNamed(context, '/ranking');
+          },
         ),
         _MenuItem(
           title: 'Profile',
           icon: Icons.person_rounded,
           color: Colors.greenAccent,
            isLightTheme: isLightTheme,
-          onTap: () => Navigator.pushNamed(context, '/profile'),
+          onTap: () async {
+            await AudioService.playButtonSound();
+            Navigator.pushNamed(context, '/profile');
+          },
         ),
         _MenuItem(
           title: 'Settings',
           icon: Icons.settings_rounded,
           color: Colors.purpleAccent,
            isLightTheme: isLightTheme,
-          onTap: () => Navigator.pushNamed(context, '/settings'),
+          onTap: () async {
+            await AudioService.playButtonSound();
+            Navigator.pushNamed(context, '/settings');
+          },
         ),
         if (isAdmin)
           _MenuItem(
@@ -169,7 +183,10 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icons.admin_panel_settings_rounded,
             color: Colors.redAccent,
              isLightTheme: isLightTheme,
-            onTap: () => Navigator.pushNamed(context, '/admin'),
+            onTap: () async {
+              await AudioService.playButtonSound();
+              Navigator.pushNamed(context, '/admin');
+            },
           ),
       ],
     );

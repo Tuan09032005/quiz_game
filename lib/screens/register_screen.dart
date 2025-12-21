@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -16,6 +17,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
 
   Future<void> _register() async {
+    await AudioService.playButtonSound();
     setState(() {
       _isLoading = true;
     });
@@ -92,7 +94,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Text("Already have an account?", style: TextStyle(color: Colors.white70)),
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () async {
+                        await AudioService.playButtonSound();
+                        Navigator.pop(context);
+                      },
                       child: const Text('Log In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ],

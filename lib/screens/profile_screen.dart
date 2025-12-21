@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -60,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _updateProfile() async {
+    await AudioService.playButtonSound();
     if (_isGuest || !mounted) return;
 
     setState(() { _isLoading = true; });
@@ -93,6 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _logout() async {
+    await AudioService.playButtonSound();
     await AuthService.signOut();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
@@ -181,7 +184,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                   ),
-                  onPressed: () => Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false),
+                  onPressed: () async {
+                    await AudioService.playButtonSound();
+                    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+                  },
                   child: const Text('Login or Sign Up', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],

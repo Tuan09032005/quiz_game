@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'admin_category_screen.dart';
 import 'admin_question_screen.dart';
+import '/services/audio_service.dart';
 
 class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
@@ -37,10 +38,13 @@ class AdminScreen extends StatelessWidget {
         leading: Icon(icon),
         title: Text(title),
         trailing: const Icon(Icons.arrow_forward),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => screen),
-        ),
+        onTap: () async {
+          await AudioService.playButtonSound();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => screen),
+          );
+        },
       ),
     );
   }

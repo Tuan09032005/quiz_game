@@ -33,4 +33,4 @@ flutter:
 
   assets:
     - assets/sounds/backgroundmusic.mp3
-    - assets/sounds/button.mp3
+    - assets/sounds/tap.mp3

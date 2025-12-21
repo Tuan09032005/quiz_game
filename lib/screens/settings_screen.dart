@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:quiz_game/helpers/theme_manager.dart';
 import 'package:quiz_game/helpers/theme_helper.dart';
+import '../services/audio_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -78,7 +79,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Về Quiz Game',
                 icon: Icons.info_rounded,
                  isLightTheme: isLightTheme,
-                onTap: () {
+                onTap: () async {
+                  await AudioService.playButtonSound();
                   showAboutDialog(
                     context: context,
                     applicationName: 'Quiz Game',
@@ -95,14 +97,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: 'Chính sách bảo mật',
                 icon: Icons.privacy_tip_rounded,
                  isLightTheme: isLightTheme,
-                onTap: () { /* TODO: Navigate to privacy policy page or URL */ },
+                onTap: () async {
+                  await AudioService.playButtonSound();
+                  /* TODO: Navigate to privacy policy page or URL */
+                },
               ),
               const SizedBox(height: 12),
               _buildInfoTile(
                 title: 'Điều khoản dịch vụ',
                 icon: Icons.description_rounded,
                  isLightTheme: isLightTheme,
-                onTap: () { /* TODO: Navigate to terms of service page or URL */ },
+                onTap: () async {
+                  await AudioService.playButtonSound();
+                  /* TODO: Navigate to terms of service page or URL */
+                },
               ),
             ],
           ),
@@ -142,7 +150,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 itemBuilder: (context, index) {
                   final isSelected = index == _currentThemeIndex;
                   return GestureDetector(
-                    onTap: () {
+                    onTap: () async {
+                      await AudioService.playButtonSound();
                       setTheme(index);
                        setState(() => _currentThemeIndex = index);
                     },

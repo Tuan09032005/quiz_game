@@ -6,7 +6,9 @@ class AudioService {
 
   static Future<void> init() async {
     _bgmPlayer.setReleaseMode(ReleaseMode.loop);
-    await _sfxPlayer.setSource(AssetSource('sounds/button.mp3'));
+    _sfxPlayer.setReleaseMode(ReleaseMode.stop);
+    await _sfxPlayer.setSource(AssetSource('sounds/tap.mp3'));
+    await _sfxPlayer.setVolume(1.0);
   }
 
   static Future<void> playBgm() async {
@@ -26,6 +28,6 @@ class AudioService {
   }
 
   static Future<void> playButtonSound() async {
-    await _sfxPlayer.resume();
+    await _sfxPlayer.play(_sfxPlayer.source!);
   }
 }

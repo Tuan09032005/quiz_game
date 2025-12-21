@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
+    await AudioService.playButtonSound();
     setState(() {
       _isLoading = true;
     });
@@ -56,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _guestLogin() async {
+    await AudioService.playButtonSound();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isGuest', true);
     await prefs.setString('userName', 'Guest');
@@ -203,7 +206,10 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text("Don't have an account?", style: TextStyle(color: Colors.white70)),
             TextButton(
-              onPressed: () => Navigator.pushNamed(context, '/register'),
+              onPressed: () async {
+                await AudioService.playButtonSound();
+                Navigator.pushNamed(context, '/register');
+              },
               child: const Text('Sign Up', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
